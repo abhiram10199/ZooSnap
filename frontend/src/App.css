@@ -1,0 +1,69 @@
+#root {
+  max-width: 1440px;
+  margin: 0 auto;
+  padding: 1rem;
+  text-align: center;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  align-items: center; 
+  width: 100%;
+  min-height: 100vh;
+  padding-top: 1rem;
+}
+
+.splash {
+  width: 100%;
+  height: 250px;
+  background-image: url("https://assets.worldwildlife.org/www-prd/images/wwfcmsprodimagesIsla.2e16d0ba.fill-1920x768.format-webp.webp");
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+}
+
+.splash::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: rgba(175, 89, 89, 0.35);
+  border-radius: inherit;
+}
+
+.splash-title {
+  position: relative;
+  font-size: 3rem;
+  color: #020302;
+  z-index: 2;
+  font-weight: 700;
+  margin: 0;
+}
+
+.text {
+  margin: 1.5rem 0;
+  font-size: 1.2rem;
+  color: #888888;
+}
+
+.submit:hover {
+  background-color: #95ac96;
+}
+
+.upload-button {
+  background-color: #516d1a;
+  color: white;
+}
+
+.img-preview img {
+  margin-top: 1rem;
+  max-width: 100%;
+  width: 300px;
+  border-radius: 12px;
+  border: 2px solid #00ff88;
+}
