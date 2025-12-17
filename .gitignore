@@ -208,3 +208,9 @@ __marimo__/
 
 # Ignore the dataset Folder named 'ZooAnimals'
 ZooAnimals/
+ZooAnimalsBackUp/
+ml_training/ZooAnimals-20251207T110314Z-1-002.zip
+ml_training/__pycache__/
+ml_api/__pycache__/
+ml_api/temp.*
+node_modules

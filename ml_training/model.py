@@ -5,27 +5,25 @@ from tensorflow.keras import layers
 from tensorflow.keras.callbacks import EarlyStopping, ReduceLROnPlateau, ModelCheckpoint
 from dataclasses import dataclass
 from typing import Tuple, List
-from dataset_loader import load_coco_dataset
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
-
+global dataset_path
+dataset_path = r"./ZooAnimals"
+ 
 @dataclass
 class ModelConfig:
-    """Configuration for model training."""
-    image_size: Tuple[int, int, int] = (512, 512, 3)
+    image_size: Tuple[int, int, int] = (224, 224, 3)
     batch_size: int = 32
     epochs: int = 15
-    learning_rate: float = 0.01
-    num_classes: int = 15
-    early_stopping_patience: int = 15
-    reduce_lr_patience: int = 5
-    model_checkpoint_path: str = './best_model.h5'
+    learning_rate: float = 1e-3
+    num_classes: int = 19
+    early_stopping_patience: int = 5
+    reduce_lr_patience: int = 3
+    model_checkpoint_path: str = "./best_model.keras"
 
 
 class DataAugmentation:
     """Handles data augmentation layers."""
-    
     @staticmethod
     def create_augmentation_layers() -> keras.Sequential:
         return keras.Sequential([
@@ -46,30 +44,31 @@ class AnimalClassificationModel:
     
     def build_model(self) -> keras.Model:
         data_augmentation = DataAugmentation.create_augmentation_layers()
-        
-        model = keras.Sequential([
-            layers.Input(self.config.image_size),
-            data_augmentation,
-            layers.Rescaling(scale=1./255),
-            
-            # Convolutional blocks
-            *self._conv_block(32, 5),
-            *self._conv_block(64, 3),
-            *self._conv_block(128, 3),
-            *self._conv_block(256, 3),
-            
-            # Dense layers
-            layers.Flatten(),
-            *self._dense_block(256, dropout=0.4),
-            *self._dense_block(128, dropout=0.3),
-            *self._dense_block(64, dropout=0.0),
-            
-            layers.Dense(self.config.num_classes, activation="softmax")
-        ])
-        
-        self.model = model
-        return model
     
+        base_model = keras.applications.EfficientNetB0(
+            include_top=False,
+            input_shape=self.config.image_size,
+            weights="imagenet"
+        )
+        base_model.trainable = False
+    
+        inputs = keras.Input(shape=self.config.image_size)
+        x = data_augmentation(inputs)
+        x = keras.applications.efficientnet.preprocess_input(x)
+        x = base_model(x, training=False)
+        x = layers.GlobalAveragePooling2D()(x)
+        x = layers.BatchNormalization()(x)
+        x = layers.Dense(256, activation="relu")(x)
+        x = layers.Dropout(0.4)(x)
+    
+        outputs = layers.Dense(
+            self.config.num_classes,
+            activation="softmax"
+        )(x)
+    
+        self.model = keras.Model(inputs, outputs)
+        return self.model
+
     @staticmethod
     def _conv_block(filters: int, kernel_size: int) -> List[layers.Layer]:
         """Creates a convolutional block with pooling and batch normalisation."""
@@ -91,14 +90,10 @@ class AnimalClassificationModel:
         return block
     
     def compile_model(self):
-        """Compiles the model with optimiser, loss, and metrics."""
-        if self.model is None:
-            raise ValueError("Model must be built before compiling")
-        
         self.model.compile(
-            optimizer = keras.optimizers.Adam(learning_rate=self.config.learning_rate),
-            loss = keras.losses.CategoricalCrossentropy(),
-            metrics = ["accuracy"]
+            optimizer=keras.optimizers.Adam(self.config.learning_rate),
+            loss=keras.losses.CategoricalCrossentropy(),
+            metrics=["accuracy"]
         )
     
     def get_callbacks(self) -> List:
@@ -155,18 +150,35 @@ class AnimalClassificationModel:
 
 class DatasetLoader:
     """Handles dataset loading and preprocessing."""
-    
+
     @staticmethod
     def load_datasets(config: ModelConfig) -> Tuple:
-        train_dataset, class_names = load_coco_dataset("ZooAnimals/train")
-        validation_dataset, _ = load_coco_dataset("ZooAnimals/valid")
-        testing_dataset, _ = load_coco_dataset("ZooAnimals/test")
-        
-        # Optimise dataset performance
-        train_dataset = DatasetLoader._optimize_dataset(train_dataset)
-        validation_dataset = DatasetLoader._optimize_dataset(validation_dataset)
-        
-        return train_dataset, validation_dataset, testing_dataset, class_names
+        train_ds = tf.keras.utils.image_dataset_from_directory(
+            "{dataset_path}",
+            validation_split=0.2,
+            subset="training",
+            seed=123,
+            image_size=config.image_size[:2],
+            batch_size=config.batch_size,
+            label_mode="categorical"
+        )
+
+        val_ds = tf.keras.utils.image_dataset_from_directory(
+            "/kaggle/input/zoo-animals/",
+            validation_split=0.2,
+            subset="validation",
+            seed=123,
+            image_size=config.image_size[:2],
+            batch_size=config.batch_size,
+            label_mode="categorical"
+        )
+
+        class_names = train_ds.class_names
+
+        train_ds = train_ds.cache().prefetch(tf.data.AUTOTUNE)
+        val_ds = val_ds.cache().prefetch(tf.data.AUTOTUNE)
+
+        return train_ds, val_ds, class_names
     
     @staticmethod
     def _optimise_dataset(dataset):
@@ -179,7 +191,7 @@ def main():
     
     config = ModelConfig()
     
-    train_dataset, validation_dataset, testing_dataset, class_names = DatasetLoader.load_datasets(config)
+    train_dataset, validation_dataset, class_names = DatasetLoader.load_datasets(config)
     
     # Build and train model
     classifier = AnimalClassificationModel(config)
@@ -190,13 +202,17 @@ def main():
     print(f"Training model with {len(class_names)} classes: {class_names}")
     classifier.train(train_dataset, validation_dataset)
     
-    # Test prediction
-    test_image_path = r".\ZooAnimals\train\0a052663-dd0a-4faf-81d3-fb7dc9ae975e_jpg.rf.6797f74037925743dea2924ac8dd81b8.jpg"
+    # Test prediction - use a sample image from one of the class folders
+    test_image_path = r".\ZooAnimals\tiger"
     if os.path.exists(test_image_path):
-        predictions = classifier.predict_image(test_image_path)
-        print("\nPrediction results:")
-        for i, class_name in enumerate(class_names):
-            print(f"{class_name}: {100 * predictions[i]:.2f}%")
+        # Get first image from tiger folder
+        images = [f for f in os.listdir(test_image_path) if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+        if images:
+            test_img = os.path.join(test_image_path, images[0])
+            predictions = classifier.predict_image(test_img)
+            print("\nPrediction results:")
+            for i, class_name in enumerate(class_names):
+                print(f"{class_name}: {100 * predictions[i]:.2f}%")
 
 
 if __name__ == "__main__":

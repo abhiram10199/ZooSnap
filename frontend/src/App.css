@@ -48,11 +48,11 @@
 .text {
   margin: 1.5rem 0;
   font-size: 1.2rem;
-  color: #888888;
+  color: #e6e6e6;
 }
 
 .submit:hover {
-  background-color: #95ac96;
+  background-color: #87b42b;
 }
 
 .upload-button {
@@ -63,7 +63,6 @@
 .img-preview img {
   margin-top: 1rem;
   max-width: 100%;
-  width: 300px;
+  width: 500px;
   border-radius: 12px;
-  border: 2px solid #00ff88;
 }
